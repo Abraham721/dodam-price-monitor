@@ -53,5 +53,7 @@ invalid-price and challenge rejection, and authentication of the retired Worker 
 The temporary Cloudflare Worker and diagnostic Pages projects have been removed.
 GitHub's production workflow
 collects directly with Chrome and does not call either diagnostic Cloudflare project.
-The old Windows scheduled task is retained for rollback and must only be disabled after
-server delivery has passed. Migration verification details are held in the local work folder.
+The old Windows scheduled task was disabled at 19:37 Asia/Seoul on 2026-10-21 after
+the first verified delivery. A second server delivery passed at 19:38 with the PC task
+disabled. The task definition is retained locally for rollback. Migration verification
+details are held in the local work folder.
