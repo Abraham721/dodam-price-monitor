@@ -1,0 +1,7 @@
+{
+  "name": "dodam-price-monitor",
+  "private": true,
+  "type": "module",
+  "scripts": {"test": "node tests.mjs"},
+  "dependencies": {"playwright-core": "1.64.1"}
+}
