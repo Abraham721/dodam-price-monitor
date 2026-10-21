@@ -1,0 +1,12 @@
+name: Source diagnostic
+on:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Inspect server source response without publishing prices
+        shell: bash
+        run: curl --fail --silent --show-error --max-time 45 --request POST https://dodam-source-probe.pages.dev/probe
