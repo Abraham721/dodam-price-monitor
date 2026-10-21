@@ -50,7 +50,8 @@ invalid-price and challenge rejection, and authentication of the retired Worker 
 ## Retired migration attempts
 
 `worker.mjs`, `cli.mjs`, and `wrangler.jsonc` preserve the raw HTTP adapter for reference.
-Cloudflare native scheduling is disabled (`crons: []`). GitHub's production workflow
+The temporary Cloudflare Worker and diagnostic Pages projects have been removed.
+GitHub's production workflow
 collects directly with Chrome and does not call either diagnostic Cloudflare project.
 The old Windows scheduled task is retained for rollback and must only be disabled after
 server delivery has passed. Migration verification details are held in the local work folder.
