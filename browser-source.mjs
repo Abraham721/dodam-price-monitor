@@ -2,7 +2,8 @@ import {chromium} from 'playwright-core';
 import {SOURCE_URL, parseMarket} from './parser.mjs';
 
 export async function readBrowserSource() {
-  const browser = await chromium.launch({channel: 'chrome', headless: true});
+  const browserEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/TOKEN|SECRET|PASSWORD|KEY/i.test(key)));
+  const browser = await chromium.launch({channel: 'chrome', headless: true, env: browserEnv});
   try {
     const page = await browser.newPage();
     await page.goto(SOURCE_URL, {waitUntil: 'domcontentloaded', timeout: 30000});
