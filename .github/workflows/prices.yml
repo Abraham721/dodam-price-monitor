@@ -25,6 +25,7 @@ jobs:
     outputs:
       snapshot: ${{ steps.collect.outputs.snapshot }}
       attempted_at: ${{ steps.collect.outputs.attempted_at }}
+      record_daily: ${{ steps.collect.outputs.record_daily }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -48,9 +49,14 @@ jobs:
           result=$(node browser-run.mjs)
           printf '%s\n' "$result"
           printf '%s' "$result" | node --input-type=module -e '
+            import {readFileSync, appendFileSync} from "node:fs";
             let raw = ""; for await (const chunk of process.stdin) raw += chunk;
             const result = JSON.parse(raw);
             if (!result.ok || !result.publicVerified || result.products < 30) process.exit(1);
+            const day = value => new Intl.DateTimeFormat("en-CA", {timeZone: "Asia/Seoul"}).format(new Date(value));
+            let previousDay;
+            try { previousDay = day(JSON.parse(readFileSync("status.json", "utf8")).observedAt); } catch {}
+            appendFileSync(process.env.GITHUB_OUTPUT, `record_daily=${previousDay !== day(result.observedAt)}\n`);
           '
           printf 'snapshot=%s\n' "$result" >> "$GITHUB_OUTPUT"
   continue-monitoring:
@@ -73,7 +79,7 @@ jobs:
         run: node handoff.mjs
   daily-status:
     needs: monitor
-    if: (github.event_name == 'workflow_dispatch' && !inputs.continuation) || github.event.schedule == '17 15 * * *'
+    if: (github.event_name == 'workflow_dispatch' && !inputs.continuation) || needs.monitor.outputs.record_daily == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions:
