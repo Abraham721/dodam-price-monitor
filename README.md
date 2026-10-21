@@ -1,40 +1,56 @@
 # Dodam public price monitor
 
-Small server-side collector for the publicly available Woo Ticket price table.
-Migration is incomplete. The existing Windows collector remains enabled.
-A Cloudflare Pages collector can read and validate the table when invoked from the
-current Korean connection, then send signed updates to Dodam Ticket's receiver.
-However, both direct collection on GitHub-hosted runners and a GitHub invocation of
-the Cloudflare collector receive the source's verification page. GitHub scheduling
-has therefore been removed. Manual runs remain available for diagnostics only.
-No verification page is bypassed and no rejected prices are published.
+The production workflow runs on GitHub-hosted Ubuntu with standard Google Chrome.
+It opens Woo Ticket's public price page normally, waits for the page's own JavaScript
+navigation, validates the complete table, sends an HMAC-signed update to Dodam Ticket,
+and verifies the resulting public prices against the observed source.
 
-`wrangler.jsonc` prepares a native Cloudflare Worker with a five-minute Cron Trigger.
-This configuration is not deployed. The dashboard-created `dodam-price-monitor`
-Worker still contains Hello World and has no secrets or scheduled trigger.
-Native scheduled source access must pass before disabling the Windows task.
-No customer information, accounts, or credentials are part of this repository.
+The raw HTTP implementation received the site's JavaScript verification page from
+remote servers. Ordinary Chrome navigation successfully reads all 72 products.
+There is no CAPTCHA solver, stealth plugin, proxy rotation, manual verification-cookie
+construction, or reuse of a person's browser profile.
 
-The receiver key belongs in the Cloudflare secret `DODAM_MONITOR_SECRET` only.
-GitHub stores a separate trigger-only secret `DODAM_TRIGGER_TOKEN`; its value also
-belongs in the Cloudflare secret of the same name. The repository variable `COLLECTOR_URL`
-points to the deployed collector's `/run` endpoint. No source URL or price payload
-can be supplied by the caller. Unauthenticated calls and nonempty payloads are rejected.
-Verification pages, incomplete tables and invalid prices are rejected without publishing.
+## Production
 
-Node.js 24 is required. No third-party runtime packages are needed.
+- Workflow: `.github/workflows/prices.yml`
+- Schedule: every five minutes (at minutes 3, 8, 13, ... 58).
+- Daily health record: 00:17 Asia/Seoul, committed as `status.json` after successful verification.
+- Receiver: `https://dodamticket.com/api/market-webhook`
+- Secret: `DODAM_MONITOR_SECRET` in GitHub Actions secrets. Never commit its value.
+- Public verification: `https://dodamticket.com/api/market-rates`
+
+The collector job has read-only repository access. Only the separate status job receives
+repository write access, and the receiver key is never supplied to that status job.
+Chrome receives an environment without secret/token/password/key variables.
+No customer orders, personal data, accounts, or credentials are stored in this repository.
+
+GitHub schedules can be delayed. The receiver's existing 30-minute expiry protection is
+preserved. Failure notifications depend on the repository owner's GitHub notification
+settings. A verified daily status commit supplies repository activity in addition to a
+health record. No paid GitHub runner, browser service, or hosting plan is enabled.
+
+## Checks
+
+Node.js 24 and the locked `playwright-core` package are used. The workflow uses the
+standard Chrome installation already available on GitHub's Ubuntu runner.
 
 ```sh
+npm ci --ignore-scripts
 node tests.mjs
-node cli.mjs
-node cli.mjs --sync
+node browser-source.mjs --probe
+node browser-run.mjs
 ```
 
-Public prices retain the receiver's existing 30-minute expiry protection.
-Successful manual diagnostics record a verified snapshot in `status.json`.
-The collector job has read-only repository access; only the status job receives
-temporary access to update this repository.
+`browser-run.mjs` requires the receiver key in `DODAM_MONITOR_SECRET`. It reads the
+fixed source URL only; it does not accept caller-supplied price data.
 
-The deployed collector is `https://dodam-price-collector.pages.dev/run` in the same
-Cloudflare account as the existing Dodam Ticket production website. Static clients
-cannot access runtime secrets. No third-party runtime packages are required.
+`tests.mjs` checks compatible signing, signed delivery, public-price verification,
+invalid-price and challenge rejection, and authentication of the retired Worker adapter.
+
+## Retired migration attempts
+
+`worker.mjs`, `cli.mjs`, and `wrangler.jsonc` preserve the raw HTTP adapter for reference.
+Cloudflare native scheduling is disabled (`crons: []`). GitHub's production workflow
+collects directly with Chrome and does not call either diagnostic Cloudflare project.
+The old Windows scheduled task is retained for rollback and must only be disabled after
+server delivery has passed. Migration verification details are held in the local work folder.
