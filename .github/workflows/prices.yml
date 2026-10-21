@@ -34,10 +34,12 @@ jobs:
           set -euo pipefail
           test -n "$COLLECTOR_URL"
           test -n "$TRIGGER_TOKEN"
-          result=$(curl --fail-with-body --silent --show-error --max-time 100 \
+          http_status=$(curl --silent --show-error --max-time 100 --output "$RUNNER_TEMP/collector-result.json" --write-out '%{http_code}' \
             --request POST "$COLLECTOR_URL" \
             --header "Authorization: Bearer $TRIGGER_TOKEN")
+          result=$(cat "$RUNNER_TEMP/collector-result.json")
           printf '%s\n' "$result"
+          test "$http_status" = 200
           printf '%s' "$result" | node --input-type=module -e '
             let raw = ""; for await (const chunk of process.stdin) raw += chunk;
             const result = JSON.parse(raw);
