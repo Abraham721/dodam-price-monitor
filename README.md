@@ -44,6 +44,13 @@ preserved. Failure notifications depend on the repository owner's GitHub notific
 settings. A verified daily status commit supplies repository activity in addition to a
 health record. No paid GitHub runner, browser service, or hosting plan is enabled.
 
+Unattended recovery was verified on 2026-10-21 at 21:08:30 and 21:13:42 Asia/Seoul:
+runs `39597139938` and `39597814553` were both started by `github-actions[bot]`.
+Both collected and publicly verified all 72 products while the Windows task was disabled.
+The mobile page also recovered from an initially expired response on its next polling
+request without a page reload. These observations verify the handoff mechanism;
+they do not imply that GitHub cron events have started arriving.
+
 ## Checks
 
 Node.js 24 and the locked `playwright-core` package are used. The workflow uses the
