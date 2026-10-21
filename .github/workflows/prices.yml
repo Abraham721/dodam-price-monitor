@@ -1,9 +1,6 @@
 name: Dodam price monitor
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '3-58/5 * * * *'
-    - cron: '17 15 * * *'
 permissions:
   contents: read
 concurrency:

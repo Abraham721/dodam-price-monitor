@@ -1,0 +1,9 @@
+{
+  "name": "dodam-price-monitor",
+  "main": "worker.mjs",
+  "account_id": "25a3441584ad68080cb57d8e985390dd",
+  "compatibility_date": "2026-10-21",
+  "workers_dev": true,
+  "observability": {"enabled": true},
+  "triggers": {"crons": ["3-58/5 * * * *"]}
+}

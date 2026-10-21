@@ -11,6 +11,17 @@ async function equalSecret(a, b) {
 }
 
 export default {
+  async scheduled(controller, env, ctx) {
+    ctx.waitUntil((async () => {
+      try {
+        const result = await run({sync: true, secret: env.DODAM_MONITOR_SECRET});
+        console.log(JSON.stringify({...result, trigger: 'cloudflare-cron', scheduledTime: controller.scheduledTime}));
+      } catch (error) {
+        console.error(JSON.stringify({ok: false, trigger: 'cloudflare-cron', code: error.code || 'network_or_runtime'}));
+        throw new Error('Scheduled price collection failed');
+      }
+    })());
+  },
   async fetch(request, env) {
     const json = (value, status = 200) => Response.json(value, {status, headers: {'Cache-Control': 'no-store'}});
     if (request.method !== 'POST' || new URL(request.url).pathname !== '/run') return json({service: 'Dodam price collector'}, 404);

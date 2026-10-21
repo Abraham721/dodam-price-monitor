@@ -1,10 +1,18 @@
 # Dodam public price monitor
 
 Small server-side collector for the publicly available Woo Ticket price table.
-GitHub Actions calls a Cloudflare Pages collector every five minutes. Cloudflare reads
-and validates the complete table and sends signed updates to Dodam Ticket's existing receiver.
-Direct collection on GitHub-hosted runners is blocked by the source verification page;
-the Cloudflare collector has been tested successfully without bypassing that page.
+Migration is incomplete. The existing Windows collector remains enabled.
+A Cloudflare Pages collector can read and validate the table when invoked from the
+current Korean connection, then send signed updates to Dodam Ticket's receiver.
+However, both direct collection on GitHub-hosted runners and a GitHub invocation of
+the Cloudflare collector receive the source's verification page. GitHub scheduling
+has therefore been removed. Manual runs remain available for diagnostics only.
+No verification page is bypassed and no rejected prices are published.
+
+`wrangler.jsonc` prepares a native Cloudflare Worker with a five-minute Cron Trigger.
+This configuration is not deployed. The dashboard-created `dodam-price-monitor`
+Worker still contains Hello World and has no secrets or scheduled trigger.
+Native scheduled source access must pass before disabling the Windows task.
 No customer information, accounts, or credentials are part of this repository.
 
 The receiver key belongs in the Cloudflare secret `DODAM_MONITOR_SECRET` only.
@@ -22,12 +30,10 @@ node cli.mjs
 node cli.mjs --sync
 ```
 
-Scheduled GitHub jobs can be delayed. Failed runs are visible in Actions; enable failure
-notifications in your account settings. Public prices retain the receiver's existing
-30-minute expiry protection. At 00:17 Asia/Seoul each day, a verified status snapshot
-is committed to `status.json`, providing a daily health record and repository activity.
-Manual dispatch also records status. The collector job has read-only repository access;
-only the daily status job receives temporary access to update this repository.
+Public prices retain the receiver's existing 30-minute expiry protection.
+Successful manual diagnostics record a verified snapshot in `status.json`.
+The collector job has read-only repository access; only the status job receives
+temporary access to update this repository.
 
 The deployed collector is `https://dodam-price-collector.pages.dev/run` in the same
 Cloudflare account as the existing Dodam Ticket production website. Static clients
