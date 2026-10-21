@@ -1,0 +1,4 @@
+.env*
+*.secrets.json
+node_modules/
+work/
