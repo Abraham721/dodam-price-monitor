@@ -1,8 +1,17 @@
 name: Dodam price monitor
 on:
   workflow_dispatch:
+    inputs:
+      keep_running:
+        description: Continue server-side collection every five minutes
+        type: boolean
+        default: true
+      continuation:
+        description: Internal server handoff
+        type: boolean
+        default: false
   schedule:
-    - cron: '3-58/5 * * * *'
+    - cron: '*/5 * * * *'
     - cron: '17 15 * * *'
 permissions:
   contents: read
@@ -15,6 +24,7 @@ jobs:
     timeout-minutes: 3
     outputs:
       snapshot: ${{ steps.collect.outputs.snapshot }}
+      attempted_at: ${{ steps.collect.outputs.attempted_at }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -33,6 +43,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          printf 'attempted_at=%s\n' "$(date +%s)" >> "$GITHUB_OUTPUT"
           test -n "$DODAM_MONITOR_SECRET"
           result=$(node browser-run.mjs)
           printf '%s\n' "$result"
@@ -42,9 +53,27 @@ jobs:
             if (!result.ok || !result.publicVerified || result.products < 30) process.exit(1);
           '
           printf 'snapshot=%s\n' "$result" >> "$GITHUB_OUTPUT"
+  continue-monitoring:
+    needs: monitor
+    if: ${{ !cancelled() && (github.event_name == 'schedule' || inputs.keep_running) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Hand off to the next server run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          ATTEMPTED_AT: ${{ needs.monitor.outputs.attempted_at }}
+        run: node handoff.mjs
   daily-status:
     needs: monitor
-    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 15 * * *'
+    if: (github.event_name == 'workflow_dispatch' && !inputs.continuation) || github.event.schedule == '17 15 * * *'
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions:

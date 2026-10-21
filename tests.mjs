@@ -3,6 +3,7 @@ import {createHmac} from 'node:crypto';
 import {run, sign, DESTINATION} from './monitor.mjs';
 import {parseMarket, SOURCE_URL} from './parser.mjs';
 import worker from './worker.mjs';
+import {handoff, delayUntilNext} from './handoff.mjs';
 
 const fixture = '<html>우천상품권 매입가 판매가<table>' + Array.from({length: 30}, (_, i) =>
   `<tr><td><a href="goods_detail.php?goodsIdx=${i + 1}">${i === 0 ? '롯데 상품권' : i === 1 ? '신세계 상품권' : '테스트 상품권 ' + i}(10만원권)</a></td><td>95,000원 (5%)</td><td>96,000원 (4%)</td></tr>`).join('') + '</table></html>';
@@ -36,4 +37,30 @@ await assert.rejects(() => run({sync: true, secret, fetcher: async (url, options
   if (url.endsWith('/api/market-rates')) { const data = await response.json(); data.rows[0].buy.price = 1; return Response.json(data); }
   return response;
 }}), {code: 'verification_prices'});
-console.log('PASS: receiver-compatible HMAC, signed delivery, live verification, challenge/invalid-price rejection, trigger authentication, no caller-supplied payload.');
+assert.equal(delayUntilNext('1000', 1_060_000), 240_000);
+assert.equal(delayUntilNext('1000', 1_400_000), 0);
+assert.equal(delayUntilNext('', 1_060_000), 300_000);
+let dispatched = 0, stateChecks = 0;
+const waits = [];
+const next = await handoff({token: 'test-only', repository: 'Abraham721/dodam-price-monitor', attemptedAt: '1000', now: () => 1_060_000, wait: async ms => waits.push(ms), fetcher: async (url, options) => {
+  if (url.endsWith('/dispatches')) {
+    dispatched++;
+    assert.equal(options.method, 'POST');
+    assert.deepEqual(JSON.parse(options.body), {ref: 'main', inputs: {keep_running: true, continuation: true}});
+    return new Response(null, {status: 204});
+  }
+  stateChecks++;
+  return Response.json({state: 'active'});
+}});
+assert.equal(next.dispatched, true);
+assert.equal(dispatched, 1);
+assert.equal(stateChecks, 2);
+assert.deepEqual(waits, [240_000]);
+let checks = 0;
+const stopped = await handoff({token: 'test-only', repository: 'Abraham721/dodam-price-monitor', attemptedAt: '1000', wait: async () => {}, fetcher: async url => {
+  assert.ok(!url.endsWith('/dispatches'));
+  return Response.json({state: ++checks === 1 ? 'active' : 'disabled_manually'});
+}});
+assert.equal(stopped.dispatched, false);
+await assert.rejects(() => handoff({token: 'test-only', repository: 'other/repository'}));
+console.log('PASS: signed price verification, invalid-source rejection, timed server handoff, repository restriction, stop-on-disable.');
