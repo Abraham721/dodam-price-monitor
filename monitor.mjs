@@ -1,5 +1,4 @@
 import {parseMarket, SOURCE_URL} from './parser.mjs';
-import {pathToFileURL} from 'node:url';
 
 export const DESTINATION = 'https://dodamticket.com/api/market-webhook';
 const fail = (code, message) => { throw Object.assign(new Error(message), {code}); };
@@ -60,7 +59,7 @@ export async function run({sync = false, secret, fetcher = fetch} = {}) {
   let result;
   try { result = await response.json(); } catch { fail('receiver_response', 'Receiver returned an invalid response'); }
   if (!response.ok || result.ok !== true) fail('receiver_rejected', `Receiver rejected update (HTTP ${response.status})`);
-  const liveResponse = await fetcher('https://dodamticket.com/api/market-rates', {signal: AbortSignal.timeout(20000), cache: 'no-store'});
+  const liveResponse = await fetcher('https://dodamticket.com/api/market-rates', {signal: AbortSignal.timeout(20000), headers: {'Cache-Control': 'no-cache'}});
   if (!liveResponse.ok) fail('verification_http', 'Public price verification failed');
   const live = await liveResponse.json();
   if (live.status !== 'fresh' || live.integrationStatus !== 'connected' || live.pricesExpired || !Array.isArray(live.rows)) {
@@ -74,13 +73,4 @@ export async function run({sync = false, secret, fetcher = fetch} = {}) {
   if (differences.length) fail('verification_prices', 'Public prices differ from the observed source');
   return {ok: true, mode: 'sync', observedAt, products: rows.length, revision: result.revision,
     changed: !!result.changed, publicVerified: true, publicFetchedAt: live.fetchedAt};
-}
-
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  try {
-    console.log(JSON.stringify(await run({sync: process.argv.includes('--sync'), secret: process.env.DODAM_MONITOR_SECRET})));
-  } catch (error) {
-    console.error(JSON.stringify({ok: false, code: error.code || 'network_or_runtime', error: error.code ? error.message : 'Monitor failed'}));
-    process.exitCode = 1;
-  } finally { delete process.env.DODAM_MONITOR_SECRET; }
 }
