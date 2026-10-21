@@ -62,5 +62,21 @@ const stopped = await handoff({token: 'test-only', repository: 'Abraham721/dodam
   return Response.json({state: ++checks === 1 ? 'active' : 'disabled_manually'});
 }});
 assert.equal(stopped.dispatched, false);
+let dispatchAttempts = 0;
+const retryWaits = [];
+const recovered = await handoff({token: 'test-only', repository: 'Abraham721/dodam-price-monitor', attemptedAt: '1000', now: () => 1_400_000, wait: async ms => retryWaits.push(ms), fetcher: async url => {
+  if (!url.endsWith('/dispatches')) return Response.json({state: 'active'});
+  return new Response(null, {status: ++dispatchAttempts === 1 ? 503 : 204});
+}});
+assert.equal(recovered.dispatched, true);
+assert.equal(dispatchAttempts, 2);
+assert.deepEqual(retryWaits, [0, 10_000]);
+let rejectedDispatches = 0;
+await assert.rejects(() => handoff({token: 'test-only', repository: 'Abraham721/dodam-price-monitor', attemptedAt: '1000', now: () => 1_400_000, wait: async () => {}, fetcher: async url => {
+  if (!url.endsWith('/dispatches')) return Response.json({state: 'active'});
+  rejectedDispatches++;
+  return new Response(null, {status: 403});
+}}), /dispatch rejected: 403/);
+assert.equal(rejectedDispatches, 1);
 await assert.rejects(() => handoff({token: 'test-only', repository: 'other/repository'}));
-console.log('PASS: signed price verification, invalid-source rejection, timed server handoff, repository restriction, stop-on-disable.');
+console.log('PASS: signed price verification, invalid-source rejection, timed server handoff, retry after service failure, no permission-error retry, repository restriction, stop-on-disable.');
