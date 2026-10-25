@@ -1,11 +1,11 @@
 {
   "ok": true,
   "mode": "sync",
-  "observedAt": "2026-10-24T15:01:03.834Z",
+  "observedAt": "2026-10-25T15:00:23.345Z",
   "products": 72,
   "revision": 51,
   "changed": false,
   "publicVerified": true,
-  "publicFetchedAt": "2026-10-24T15:01:03.834Z",
+  "publicFetchedAt": "2026-10-25T15:00:23.345Z",
   "collector": "github-standard-chrome"
 }
