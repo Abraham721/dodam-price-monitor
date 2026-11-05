@@ -27,6 +27,8 @@ assert.equal((await checkHealth(options)).outage.action,'opened');
 assert.equal((await checkHealth(options)).outage.action,'unchanged');
 assert.equal(mutations.length,1,'No repeated notification while the outage is unchanged');
 live=fresh;
+assert.equal((await checkHealth(options)).outage.action,'unchanged','Cached prices alone must not clear an unresolved collector failure');
+live={...fresh,fetchedAt:new Date(now+1000).toISOString()};
 assert.equal((await checkHealth(options)).outage.action,'closed');
 const snapshot={ok:true,publicVerified:true,quarantinedProducts:[{id:'woo-168',name:'RCE-TEST-DO-NOT-BUY'}]};
 assert.equal((await checkHealth({...options,snapshot})).catalog.action,'opened');

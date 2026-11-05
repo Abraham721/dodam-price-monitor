@@ -39,12 +39,17 @@ export async function reconcileIssue({kind,problems,context,repository=REPOSITOR
   const open=await api('/issues?state=open&creator=github-actions%5Bbot%5D&per_page=100');
   const issue=open.find(i=>!i.pull_request&&i.user?.login==='github-actions[bot]'&&i.title===title&&i.body?.includes(marker));
   if(!problems.length) {
+    // A still-fresh cached price is not evidence that a rejected collector has
+    // recovered. Independent checks close an outage only after a newer public
+    // observation; the collector can also supply an explicitly verified result.
+    const previousObserved=Date.parse(issue?.body?.match(/<!-- dodam-observed:([^ ]*) -->/)?.[1]||issue?.created_at);
+    if(issue&&kind==='outage'&&!context.verified&&!(Date.parse(context.lastObservedAt)>previousObserved))return {action:'unchanged',number:issue.number};
     if(issue) {await api('/issues/'+issue.number,'PATCH',{state:'closed',state_reason:'completed'});return {action:'closed',number:issue.number};}
     return {action:'none'};
   }
   const key=createHash('sha256').update(JSON.stringify(problems)).digest('hex');
   if(issue?.body?.includes(marker+key+' -->'))return {action:'unchanged',number:issue.number};
-  const body=marker+key+' -->\n'+(kind==='outage'?'가격연동 확인이 필요합니다. 30분 만료 보호는 유지됩니다.':'아래 신규 상품은 자동 등록하지 않았습니다. 기존 72개 상품의 가격연동은 계속됩니다.')+
+  const body=marker+key+' -->\n<!-- dodam-observed:'+(context.lastObservedAt||'')+' -->\n'+(kind==='outage'?'가격연동 확인이 필요합니다. 30분 만료 보호는 유지됩니다.':'아래 신규 상품은 자동 등록하지 않았습니다. 기존 72개 상품의 가격연동은 계속됩니다.')+
     '\n\n'+problems.map(p=>'- '+safe(p.message)).join('\n')+
     '\n\n마지막 공개 가격 확인: '+safe(context.lastObservedAt||'조회 불가')+
     '\n확인 실행: https://github.com/'+repository+'/actions/runs/'+safe(context.runId||'')+
@@ -57,7 +62,7 @@ export async function checkHealth({token,repository=REPOSITORY,runId,now=Date.no
   let live;
   try {const r=await fetcher('https://dodamticket.com/api/market-rates',{signal:AbortSignal.timeout(20000),headers:{'Cache-Control':'no-cache'}});if(r.ok)live=await r.json();}catch{}
   const assessment=assessHealth(live,{now,error,snapshot});
-  const context={lastObservedAt:live?.fetchedAt,runId};
+  const context={lastObservedAt:live?.fetchedAt,runId,verified:!!(snapshot?.ok&&snapshot.publicVerified)};
   const outage=await reconcileIssue({kind:'outage',problems:assessment.problems,context,token,repository,fetcher});
   let catalog={action:'not_checked'};
   if(assessment.pending!==null)catalog=await reconcileIssue({kind:'catalog',problems:assessment.pending.map(p=>({code:p.id,message:p.id+' · '+p.name})),context,token,repository,fetcher});
