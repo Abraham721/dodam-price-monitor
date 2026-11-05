@@ -1,5 +1,49 @@
 # Dodam public price monitor
 
+## 2026-11-06 incident prevention
+
+The 2026-11-03 incident began when the real source temporarily listed
+`woo-168 / RCE-TEST-DO-NOT-BUY` (12:43:26 KST) and
+`woo-169 / GIF-CONTROL-TEST` (12:53:54 KST), each priced at 100 won.
+The ordinary server collector accepted 74 source products. After those temporary
+products disappeared, the receiver compared every subsequent table against the
+entire previously accepted list and rejected all updates with HTTP 422. The last
+successful observation was 12:59:04 KST. The public 30-minute expiry protection
+then hid prices as designed. This is evidence of temporary source rows; it does
+not establish who created them or why.
+
+`approved-products.mjs` now contains the reviewed 72-product baseline from before
+the incident. Both collector and receiver validate every approved ID and its
+denomination. Unknown products are quarantined before price parsing; they never
+enter public prices or the required continuity baseline. Their appearance and
+disappearance therefore cannot stop existing price updates. The receiver also
+automatically removes legacy unapproved rows from an old payload and records
+that correction in its existing audit history. Missing approved products,
+invalid amounts, signature failures, source challenges, and expiry remain blocked.
+
+The admin price page lists pending products for review. New legitimate products
+require an explicit update to BOTH matching catalog files in the collector and
+homepage server, source validation tests, and deployment. Do not copy a live
+unreviewed source list into the approved catalog.
+
+`health.mjs` runs after each collection, including failed collections, and the
+separate `health.yml` also checks public prices every ten minutes. It detects a
+12-minute freshness delay, invalid public catalogs/prices, and actionable source
+or receiver validation failures. A repository issue is opened once, left quiet
+while unchanged, and closed after recovery. A separate issue tracks quarantined
+new products. No email, chat recipient, paid service, or personal token is added;
+notification delivery follows the owner's existing GitHub notification settings.
+Only health jobs receive repository-scoped `issues: write`; they never receive the
+receiver signing key. Independent health checks do not clear pending catalog
+reviews when no verified collector snapshot is available.
+
+Receiver rejection codes and safe details now appear in collector logs. Public
+verification compares the exact approved product count, IDs, names, denominations,
+and prices. Regression tests replay temporary products appearing/disappearing,
+legacy contamination, missing approved products, deduplicated health alerts, and
+automatic recovery. Local recovery/deployment evidence is under
+`work/recovery_20261106` and `work/prevention_20261106` (Git-ignored).
+
 The production workflow runs on GitHub-hosted Ubuntu with standard Google Chrome.
 It opens Woo Ticket's public price page normally, waits for the page's own JavaScript
 navigation, validates the complete table, sends an HMAC-signed update to Dodam Ticket,

@@ -1,3 +1,6 @@
+import { APPROVED_PRODUCTS } from './approved-products.mjs';
+const approved = new Map(APPROVED_PRODUCTS.map(row => [row.id, row]));
+const invalid = (code, message) => { throw Object.assign(new Error(message), {code}); };
 export const SOURCE_URL = 'http://www.wooticket.com/';
 const clean = value => value.replace(/<[^>]*>/g, ' ').replace(/&nbsp;|&#160;/gi, ' ').replace(/&amp;/gi, '&').replace(/&quot;/gi, '"').replace(/\s+/g, ' ').trim();
 function category(name) {
@@ -20,22 +23,26 @@ function quote(cell) {
  if (!Number.isSafeInteger(price) || price <= 0 || discount < 0 || discount >= 100) throw new Error('Invalid price');
  return { price, discount, rate: Math.round((100 - discount) * 100) / 100 };
 }
-export function parseMarket(html) {
+export function parseMarket(html, {onQuarantined} = {}) {
  if (!/우천상품권/.test(html) || !/매입가[\s\S]*판매가/.test(html)) throw new Error('Source layout changed');
  const rows = [], seen = new Set();
  for (const part of html.split(/<tr\b/i).slice(1)) {
   const row = part.split(/<\/tr>/i)[0], id = row.match(/goods_detail\.php\?goodsIdx=(\d+)/)?.[1];
   if (!id) continue;
   const cells = [...row.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)].map(x => x[1]);
+  const baseline = approved.get('woo-' + id);
+  if (!baseline) { onQuarantined?.({id: 'woo-' + id, name: clean(cells[0] || '').slice(0,100)}); continue; }
   if (cells.length !== 3 || seen.has(id)) throw new Error('Invalid product row');
   const name = clean(cells[0]), buy = quote(cells[1]), sell = quote(cells[2]);
   const denomination = name.match(/(\d+)\s*(만|천)원/);
   const face = denomination ? Number(denomination[1]) * (denomination[2] === '만' ? 10000 : 1000) : null;
+  if (face !== baseline.face) invalid('source_denomination', 'Approved denomination changed: woo-' + id);
   if (face && [buy, sell].some(q => q && Math.abs(face * q.rate / 100 - q.price) > 2)) throw new Error('Price and denomination mismatch');
   if (!name || name.length > 100 || !buy && !sell) throw new Error('Invalid product');
   rows.push({ id: 'woo-' + id, name, category: category(name), face, buy, sell, sourceUrl: SOURCE_URL + 'goods_detail.php?goodsIdx=' + id });
   seen.add(id);
  }
- if (rows.length < 30 || !rows.some(r => /롯데 상품권.*10만원/.test(r.name)) || !rows.some(r => /신세계 상품권.*10만원/.test(r.name))) throw new Error('Incomplete source');
+ const missing = APPROVED_PRODUCTS.filter(product => !seen.has(product.id.slice(4))).map(product => product.id);
+ if (missing.length) invalid('source_incomplete', 'Approved products missing: ' + missing.join(', '));
  return rows;
 }

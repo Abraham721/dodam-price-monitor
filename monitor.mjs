@@ -1,7 +1,7 @@
 import {parseMarket, SOURCE_URL} from './parser.mjs';
 
 export const DESTINATION = 'https://dodamticket.com/api/market-webhook';
-const fail = (code, message) => { throw Object.assign(new Error(message), {code}); };
+const fail = (code, message, details = {}) => { throw Object.assign(new Error(message), {code, ...details}); };
 
 export async function readSource(fetcher = fetch) {
   const response = await fetcher(SOURCE_URL, {
@@ -28,8 +28,10 @@ export async function readSource(fetcher = fetch) {
     fail('source_challenge', 'Source returned a verification page; prices were not changed');
   }
   let rows;
-  try { rows = parseMarket(html); } catch { fail('source_format', 'Source price table failed validation'); }
-  return {html, rows, observedAt: new Date().toISOString()};
+  const pending = new Map();
+  try { rows = parseMarket(html, {onQuarantined: row => {if(pending.size<100)pending.set(row.id,row);}}); }
+  catch(error) { fail(error.code || 'source_format', error.message); }
+  return {html, rows, observedAt: new Date().toISOString(), quarantinedProducts:[...pending.values()].sort((a,b)=>a.id.localeCompare(b.id))};
 }
 
 export async function sign(secret, stamp, raw) {
@@ -41,8 +43,8 @@ export async function sign(secret, stamp, raw) {
 
 export async function run({sync = false, secret, fetcher = fetch} = {}) {
   if (sync && (!secret || secret.length < 32)) fail('configuration', 'Receiver key is missing');
-  const {html, rows, observedAt} = await readSource(fetcher);
-  if (!sync) return {ok: true, mode: 'probe', observedAt, products: rows.length};
+  const {html, rows, observedAt, quarantinedProducts} = await readSource(fetcher);
+  if (!sync) return {ok: true, mode: 'probe', observedAt, products: rows.length, quarantinedProducts};
   const raw = JSON.stringify({sourceUrl: SOURCE_URL, observedAt, html}), stamp = String(Date.now());
   const headers = {'Content-Type': 'application/json', 'X-Dodam-Timestamp': stamp,
     'X-Dodam-Signature': await sign(secret, stamp, raw)};
@@ -58,7 +60,7 @@ export async function run({sync = false, secret, fetcher = fetch} = {}) {
   }
   let result;
   try { result = await response.json(); } catch { fail('receiver_response', 'Receiver returned an invalid response'); }
-  if (!response.ok || result.ok !== true) fail('receiver_rejected', `Receiver rejected update (HTTP ${response.status})`);
+  if (!response.ok || result.ok !== true) fail('receiver_rejected', `Receiver rejected update (HTTP ${response.status}): ${typeof result.error === 'string' ? result.error.slice(0,400) : 'Unspecified rejection'}`, {receiverStatus:response.status,receiverCode:result.code});
   const liveResponse = await fetcher('https://dodamticket.com/api/market-rates', {signal: AbortSignal.timeout(20000), headers: {'Cache-Control': 'no-cache'}});
   if (!liveResponse.ok) fail('verification_http', 'Public price verification failed');
   const live = await liveResponse.json();
@@ -68,9 +70,9 @@ export async function run({sync = false, secret, fetcher = fetch} = {}) {
   if (Date.parse(live.fetchedAt) < Date.parse(observedAt)) fail('verification_time', 'Public update time did not advance');
   const differences = rows.filter(row => {
     const other = live.rows.find(x => x.id === row.id);
-    return !other || JSON.stringify([row.buy, row.sell]) !== JSON.stringify([other.buy, other.sell]);
+    return !other || row.name !== other.name || row.face !== other.face || JSON.stringify([row.buy, row.sell]) !== JSON.stringify([other.buy, other.sell]);
   });
-  if (differences.length) fail('verification_prices', 'Public prices differ from the observed source');
+  if (differences.length || live.rows.length !== rows.length) fail('verification_prices', 'Public prices differ from the approved source products');
   return {ok: true, mode: 'sync', observedAt, products: rows.length, revision: result.revision,
-    changed: !!result.changed, publicVerified: true, publicFetchedAt: live.fetchedAt};
+    changed: !!result.changed, publicVerified: true, publicFetchedAt: live.fetchedAt, quarantinedProducts};
 }

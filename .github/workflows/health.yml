@@ -1,0 +1,27 @@
+name: Dodam independent price health
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '3-59/10 * * * *'
+permissions:
+  contents: read
+  issues: write
+concurrency:
+  group: dodam-price-health-issues
+  cancel-in-progress: false
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Verify public freshness independently of collection
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: node health.mjs

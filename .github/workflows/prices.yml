@@ -26,6 +26,7 @@ jobs:
       snapshot: ${{ steps.collect.outputs.snapshot }}
       attempted_at: ${{ steps.collect.outputs.attempted_at }}
       record_daily: ${{ steps.collect.outputs.record_daily }}
+      failure: ${{ steps.collect.outputs.failure }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -34,7 +35,7 @@ jobs:
         with:
           node-version: '24'
       - name: Validate collector
-        run: node tests.mjs
+        run: npm test
       - name: Install locked browser client
         run: npm ci --ignore-scripts
       - name: Collect and verify public prices
@@ -52,13 +53,38 @@ jobs:
             import {readFileSync, appendFileSync} from "node:fs";
             let raw = ""; for await (const chunk of process.stdin) raw += chunk;
             const result = JSON.parse(raw);
-            if (!result.ok || !result.publicVerified || result.products < 30) process.exit(1);
+            if (!result.ok || !result.publicVerified || result.products !== 72) process.exit(1);
             const day = value => new Intl.DateTimeFormat("en-CA", {timeZone: "Asia/Seoul"}).format(new Date(value));
             let previousDay;
             try { previousDay = day(JSON.parse(readFileSync("status.json", "utf8")).observedAt); } catch {}
             appendFileSync(process.env.GITHUB_OUTPUT, `record_daily=${previousDay !== day(result.observedAt)}\n`);
           '
           printf 'snapshot=%s\n' "$result" >> "$GITHUB_OUTPUT"
+  health-report:
+    needs: monitor
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    concurrency:
+      group: dodam-price-health-issues
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Report stalled prices and quarantined products without repeated alerts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SNAPSHOT: ${{ needs.monitor.outputs.snapshot }}
+          COLLECTOR_ERROR: ${{ needs.monitor.outputs.failure }}
+        run: node health.mjs
   continue-monitoring:
     needs: monitor
     if: ${{ !cancelled() && (github.event_name == 'schedule' || inputs.keep_running) }}
