@@ -1,12 +1,17 @@
 {
   "ok": true,
   "mode": "sync",
-  "observedAt": "2026-11-11T15:03:52.460Z",
+  "observedAt": "2026-11-12T15:07:58.062Z",
   "products": 72,
-  "revision": 139,
+  "revision": 145,
   "changed": false,
   "publicVerified": true,
-  "publicFetchedAt": "2026-11-11T15:03:52.460Z",
-  "quarantinedProducts": [],
+  "publicFetchedAt": "2026-11-12T15:07:58.062Z",
+  "quarantinedProducts": [
+    {
+      "id": "woo-147",
+      "name": "ak 이랜드 아이파크 5만원권"
+    }
+  ],
   "collector": "github-standard-chrome"
 }
