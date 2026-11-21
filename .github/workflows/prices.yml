@@ -61,7 +61,10 @@ jobs:
           chrome_path="$chrome_dir/chrome-linux64/chrome"
           actual_version=$("$chrome_path" --version)
           printf '%s\n' "$actual_version"
-          test "${actual_version##* }" = "$DODAM_CHROME_VERSION"
+          if [[ ! "$actual_version" =~ ([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+) ]] || [[ "${BASH_REMATCH[1]}" != "$DODAM_CHROME_VERSION" ]]; then
+            echo 'Installed Chrome does not match the pinned version.' >&2
+            exit 1
+          fi
           printf 'DODAM_CHROME_PATH=%s\n' "$chrome_path" >> "$GITHUB_ENV"
       - name: Verify candidate Chrome with all 72 public products
         if: github.event_name == 'pull_request'
