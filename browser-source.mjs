@@ -3,7 +3,12 @@ import {SOURCE_URL, parseMarket} from './parser.mjs';
 
 export async function readBrowserSource() {
   const browserEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/TOKEN|SECRET|PASSWORD|KEY/i.test(key)));
-  const browser = await chromium.launch({channel: 'chrome', headless: true, env: browserEnv});
+  const executablePath = process.env.DODAM_CHROME_PATH;
+  const browser = await chromium.launch({
+    ...(executablePath ? {executablePath} : {channel: 'chrome'}),
+    headless: true,
+    env: browserEnv,
+  });
   try {
     const page = await browser.newPage();
     const failures = [];

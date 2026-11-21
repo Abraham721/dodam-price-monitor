@@ -44,7 +44,7 @@ legacy contamination, missing approved products, deduplicated health alerts, and
 automatic recovery. Local recovery/deployment evidence is under
 `work/recovery_20261106` and `work/prevention_20261106` (Git-ignored).
 
-The production workflow runs on GitHub-hosted Ubuntu with standard Google Chrome.
+The production workflow runs on GitHub-hosted Ubuntu with a pinned Google Chrome for Testing build.
 It opens Woo Ticket's public price page normally, waits for the page's own JavaScript
 navigation, validates the complete table, sends an HMAC-signed update to Dodam Ticket,
 and verifies the resulting public prices against the observed source.
@@ -97,8 +97,13 @@ they do not imply that GitHub cron events have started arriving.
 
 ## Checks
 
-Node.js 24 and the locked `playwright-core` package are used. The workflow uses the
-standard Chrome installation already available on GitHub's Ubuntu runner.
+Node.js 24 and the locked `playwright-core` package are used. The production job
+installs the exact `DODAM_CHROME_VERSION` set in `.github/workflows/prices.yml` and
+checks the installed version before launching it. To upgrade Chrome, edit the pin
+in a pull request and wait for the `monitor` check to pass before merging. The
+pull request check uses the proposed binary and Playwright lockfile to collect
+and validate all 72 approved products without publishing prices. After merging,
+confirm the next automatic production run verifies the public prices.
 
 ```sh
 npm ci --ignore-scripts
