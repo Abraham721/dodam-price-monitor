@@ -1,5 +1,12 @@
 name: Dodam price monitor
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/prices.yml'
+      - '*.mjs'
+      - 'package.json'
+      - 'package-lock.json'
   workflow_dispatch:
     inputs:
       keep_running:
@@ -16,10 +23,14 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: dodam-price-monitor
+  group: ${{ github.event_name == 'pull_request' && format('dodam-price-monitor-pr-{0}', github.event.number) || 'dodam-price-monitor' }}
   cancel-in-progress: false
+env:
+  # Update via a pull request and wait for the 72-product browser probe to pass.
+  DODAM_CHROME_VERSION: '158.0.8127.36'
 jobs:
   monitor:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -38,7 +49,37 @@ jobs:
         run: npm test
       - name: Install locked browser client
         run: npm ci --ignore-scripts
+      - name: Install pinned Chrome for Testing
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$DODAM_CHROME_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          chrome_dir=$(mktemp -d "$RUNNER_TEMP/dodam-chrome.XXXXXX")
+          archive="https://storage.googleapis.com/chrome-for-testing-public/$DODAM_CHROME_VERSION/linux64/chrome-linux64.zip"
+          curl --fail --silent --show-error --retry 2 --max-time 60 "$archive" -o "$chrome_dir/chrome.zip"
+          unzip -q "$chrome_dir/chrome.zip" -d "$chrome_dir"
+          chrome_path="$chrome_dir/chrome-linux64/chrome"
+          actual_version=$("$chrome_path" --version)
+          printf '%s\n' "$actual_version"
+          test "${actual_version##* }" = "$DODAM_CHROME_VERSION"
+          printf 'DODAM_CHROME_PATH=%s\n' "$chrome_path" >> "$GITHUB_ENV"
+      - name: Verify candidate Chrome with all 72 public products
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          result=$(node browser-source.mjs --probe)
+          printf '%s\n' "$result"
+          printf '%s' "$result" | node --input-type=module -e '
+            let raw = "";
+            for await (const chunk of process.stdin) raw += chunk;
+            const result = JSON.parse(raw);
+            if (!result.ok || result.products !== 72 || result.browserVersion !== process.env.DODAM_CHROME_VERSION) {
+              throw new Error("The pinned Chrome must collect all 72 approved products");
+            }
+          '
       - name: Collect and verify public prices
+        if: github.ref == 'refs/heads/main'
         id: collect
         env:
           DODAM_MONITOR_SECRET: ${{ secrets.DODAM_MONITOR_SECRET }}
@@ -62,7 +103,7 @@ jobs:
           printf 'snapshot=%s\n' "$result" >> "$GITHUB_OUTPUT"
   health-report:
     needs: monitor
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 3
     concurrency:
@@ -87,7 +128,7 @@ jobs:
         run: node health.mjs
   continue-monitoring:
     needs: monitor
-    if: ${{ !cancelled() && (github.event_name == 'schedule' || inputs.keep_running) }}
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || inputs.keep_running) }}
     runs-on: ubuntu-latest
     timeout-minutes: 8
     permissions:
@@ -105,7 +146,7 @@ jobs:
         run: node handoff.mjs
   daily-status:
     needs: monitor
-    if: (github.event_name == 'workflow_dispatch' && !inputs.continuation) || needs.monitor.outputs.record_daily == 'true'
+    if: github.ref == 'refs/heads/main' && ((github.event_name == 'workflow_dispatch' && !inputs.continuation) || needs.monitor.outputs.record_daily == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions:
