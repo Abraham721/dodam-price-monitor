@@ -1,12 +1,12 @@
 {
   "ok": true,
   "mode": "sync",
-  "observedAt": "2026-11-21T15:02:03.496Z",
+  "observedAt": "2026-11-22T15:01:42.221Z",
   "products": 72,
   "revision": 155,
   "changed": false,
   "publicVerified": true,
-  "publicFetchedAt": "2026-11-21T15:02:03.496Z",
+  "publicFetchedAt": "2026-11-22T15:01:42.221Z",
   "quarantinedProducts": [
     {
       "id": "woo-147",
